@@ -18,6 +18,21 @@ function write(relativePath, contents) {
   return target;
 }
 
+// Up to three other posts for the "keep reading" rail, preferring ones that
+// share a tag and falling back to the newest so the rail is never short.
+function relatedTo(post, posts) {
+  const tags = new Set(post.data.tags || []);
+  return posts
+    .filter((other) => other.slug !== post.slug)
+    .map((other) => ({
+      other,
+      shared: (other.data.tags || []).filter((tag) => tags.has(tag)).length,
+    }))
+    .sort((a, b) => b.shared - a.shared)
+    .slice(0, 3)
+    .map((entry) => entry.other);
+}
+
 function main() {
   const site = JSON.parse(readFileSync('site.config.json', 'utf8'));
   const posts = loadPosts().sort((a, b) => {
@@ -35,7 +50,7 @@ function main() {
 
   write('index.html', renderIndex(site, posts));
   for (const post of posts) {
-    write(join('posts', post.slug, 'index.html'), renderPost(site, post));
+    write(join('posts', post.slug, 'index.html'), renderPost(site, post, relatedTo(post, posts)));
   }
   write('feed.xml', renderFeed(site, posts));
   write('sitemap.xml', renderSitemap(site, posts));
