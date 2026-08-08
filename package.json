@@ -1,0 +1,19 @@
+{
+  "name": "epoch-and-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static site for blog.ancilla.lol",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "gate": "node build/gate.mjs",
+    "build": "node build/gate.mjs && node build/build.mjs",
+    "test": "node --test build/*.test.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "marked": "18.0.9"
+  }
+}

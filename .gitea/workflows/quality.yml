@@ -1,0 +1,58 @@
+name: Static export quality
+
+# The required status check for main. Branch protection names this context, so
+# a pull request cannot merge until the publish contract in PUBLISHING.md is
+# satisfied and the site actually builds.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests for the publish contract
+        run: npm test
+
+      - name: Content gate
+        run: npm run gate
+
+      - name: Build the static export
+        run: node build/build.mjs
+
+      - name: Verify the export is servable
+        # A green build that produced nothing would rsync --delete an empty
+        # tree over the live docroot, so assert real output before it can ship.
+        run: |
+          set -euo pipefail
+          test -s out/index.html
+          test -s out/feed.xml
+          test -s out/sitemap.xml
+          test -s out/styles.css
+          posts=$(find out/posts -name index.html -type f | wc -l)
+          echo "post pages: ${posts}"
+          [ "${posts}" -ge 1 ]
+          grep -q '<article' out/posts/*/index.html

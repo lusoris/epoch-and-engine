@@ -1,0 +1,95 @@
+name: Deploy to VPS
+
+# Continuous deploy of the reviewed static export to the blog.ancilla.lol nginx
+# vhost on 151.80.87.68:
+#   Gitea main -> npm run build -> deploy/deploy.sh rsync -> /var/www/ancilla-blog
+#
+# The deploy identity is blog-deploy, whose authorized_keys pins
+# `command="/usr/bin/rrsync -wo /var/www/ancilla-blog",restrict` — write-only
+# rsync, chrooted, no shell. The matching private key lives in the
+# VPS_DEPLOY_SSH_KEY secret.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ancilla-blog-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEPLOY_HOST: blog-deploy@151.80.87.68
+      # "." and never an absolute path — see the comment in deploy/deploy.sh.
+      DEPLOY_PATH: .
+      DEPLOY_SSH_KEY: /tmp/ancilla_blog_deploy
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install rsync
+        # The runner maps ubuntu-latest to node:20-bookworm, which ships no
+        # rsync, so deploy.sh exited 127 with "rsync: command not found".
+        # Do NOT pipe --version into head: rsync then dies on SIGPIPE and the
+        # step fails even though the install succeeded.
+        run: |
+          if ! command -v rsync >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends rsync openssh-client
+          fi
+          rsync --version >/dev/null
+          echo "rsync present"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the restricted VPS deploy key
+        env:
+          VPS_DEPLOY_SSH_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VPS_DEPLOY_SSH_KEY:-}" ]; then
+            echo "::error::VPS_DEPLOY_SSH_KEY is not set — cannot deploy"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$VPS_DEPLOY_SSH_KEY" > /tmp/ancilla_blog_deploy
+          chmod 600 /tmp/ancilla_blog_deploy
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -t rsa,ed25519 151.80.87.68 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Build and deploy to the VPS
+        run: deploy/deploy.sh
+
+      - name: Verify the published site changed
+        # rrsync is write-only, so the deploy cannot read back what it wrote.
+        # Fetch the public URL instead and assert the homepage lists real posts
+        # rather than the "awaiting first deploy" placeholder.
+        #
+        # Must be https with -L: the origin is behind Cloudflare and plain http
+        # answers 301, which curl reports as success with an empty body. The
+        # cache-buster defends against an edge-cached copy of the old page.
+        run: |
+          set -euo pipefail
+          sleep 3
+          body=$(curl -fsSL --retry 3 --retry-delay 3 --max-time 30 \
+            "https://blog.ancilla.lol/?deploy=${GITHUB_SHA}")
+          if printf '%s' "$body" | grep -qi 'awaiting first deploy'; then
+            echo "::error::homepage still serves the placeholder — deploy did not reach the docroot"
+            exit 1
+          fi
+          printf '%s' "$body" | grep -q '/posts/' \
+            || { echo "::error::homepage links no posts"; exit 1; }
+          echo "published site is live and lists posts"
