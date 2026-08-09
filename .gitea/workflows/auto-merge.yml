@@ -31,11 +31,6 @@ jobs:
   arm:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # AGit-authored PRs only. Every fleet PR arrives as refs/pull/N/head; a
-    # human working from a named topic branch is left alone deliberately.
-    # Author identity cannot be used here — agents and operator share the
-    # gitea_admin account.
-    if: startsWith(github.event.pull_request.head.ref, 'refs/pull/')
     steps:
       - name: Arm auto-merge
         env:
@@ -48,6 +43,28 @@ jobs:
           if [ -z "${TOKEN:-}" ]; then
             echo "::error::no GITEA_TOKEN in scope — auto-merge cannot be armed"
             exit 1
+          fi
+          # AGit-authored PRs only. This USED to be a job-level
+          #   if: startsWith(github.event.pull_request.head.ref, 'refs/pull/')
+          # which never once matched: Gitea's webhook payload does not carry
+          # refs/pull/N/head in head.ref even though the REST API reports
+          # exactly that for the same PR. Every fleet PR was therefore left
+          # unarmed — 4/4 runs "skipped" in this repo — and PRs accumulated
+          # open, which is the precise failure the header above warns about.
+          # Ask the API instead of trusting the event payload. A human on a
+          # named topic branch still reports a branch name and is left alone.
+          if ! curl -sS --retry 2 --retry-delay 3 -o /tmp/pr.json \
+              -H "Authorization: token ${TOKEN}" \
+              "${API}/repos/${REPO}/pulls/${PR}"; then
+            echo "::error::cannot read PR ${PR} to classify its head ref"
+            exit 1
+          fi
+          # Note: a MERGED PR whose branch was deleted also reports
+          # refs/pull/N/head. That is harmless here — this only runs on
+          # opened/reopened/synchronize, while a human's branch still exists.
+          if ! grep -q '"ref":"refs/pull/' /tmp/pr.json; then
+            echo "not an AGit fleet PR — leaving it for a human to merge"
+            exit 0
           fi
           code=$(curl -sS -o /tmp/resp -w '%{http_code}' -X POST \
             -H "Authorization: token ${TOKEN}" \
