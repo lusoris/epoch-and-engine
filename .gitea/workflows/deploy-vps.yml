@@ -7,7 +7,7 @@ name: Deploy to VPS
 # The deploy identity is blog-deploy, whose authorized_keys pins
 # `command="/usr/bin/rrsync -wo /var/www/ancilla-blog",restrict` — write-only
 # rsync, chrooted, no shell. The matching private key lives in the
-# VPS_DEPLOY_SSH_KEY secret.
+# VPS_DEPLOY_SSH_KEY_B64 secret, base64-encoded so act_runner can mask it.
 
 on:
   push:
@@ -57,16 +57,27 @@ jobs:
 
       - name: Install the restricted VPS deploy key
         env:
-          VPS_DEPLOY_SSH_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}
+          # MUST stay single-line base64. act_runner masks the literal secret
+          # string, but a step's `env:` block is echoed into the log with
+          # newlines rendered as \n, so a multi-line PEM never matches the mask
+          # and the ENTIRE private key was printed in cleartext (job 7830,
+          # 2026-08-08). Every other secret in that same log masked correctly
+          # because each is single-line. Base64 keeps it one line, so it masks.
+          # Never reintroduce a multi-line secret into an `env:` block here.
+          VPS_DEPLOY_SSH_KEY_B64: ${{ secrets.VPS_DEPLOY_SSH_KEY_B64 }}
         run: |
           set -euo pipefail
-          if [ -z "${VPS_DEPLOY_SSH_KEY:-}" ]; then
-            echo "::error::VPS_DEPLOY_SSH_KEY is not set — cannot deploy"
+          if [ -z "${VPS_DEPLOY_SSH_KEY_B64:-}" ]; then
+            echo "::error::VPS_DEPLOY_SSH_KEY_B64 is not set — cannot deploy"
             exit 1
           fi
           umask 077
-          printf '%s\n' "$VPS_DEPLOY_SSH_KEY" > /tmp/ancilla_blog_deploy
+          printf '%s' "$VPS_DEPLOY_SSH_KEY_B64" | base64 -d > /tmp/ancilla_blog_deploy
           chmod 600 /tmp/ancilla_blog_deploy
+          # Fail loudly on a truncated or mis-encoded secret rather than
+          # surfacing it later as an opaque rsync auth failure.
+          ssh-keygen -y -f /tmp/ancilla_blog_deploy >/dev/null 2>&1 \
+            || { echo "::error::decoded deploy key is not a valid private key"; exit 1; }
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           ssh-keyscan -t rsa,ed25519 151.80.87.68 >> ~/.ssh/known_hosts 2>/dev/null || true
 
