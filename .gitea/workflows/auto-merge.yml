@@ -15,8 +15,15 @@ name: Auto-merge fleet PRs
 # Do NOT gate on the PR's `mergeable` field. In Gitea that reflects merge
 # CONFLICTS only — red PRs report mergeable=true. Status is the real gate.
 
+# pull_request_target, NOT pull_request: Gitea withholds stored secrets from
+# workflows triggered by AGit-flow PR heads (proven on ratelab-sites, where
+# secrets.AUTOMERGE_TOKEN evaluated to the empty string on AGit PRs while a
+# branch PR received it). pull_request_target runs the workflow from the BASE
+# branch with secrets injected — safe here because this job never checks out
+# or executes PR code. Bonus: arming works even when a stale fleet head
+# predates these workflow files.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
@@ -34,7 +41,13 @@ jobs:
     steps:
       - name: Arm auto-merge
         env:
-          TOKEN: ${{ secrets.GITEA_TOKEN }}
+          # NOT secrets.GITEA_TOKEN: that name is reserved, so it always
+          # resolves to the auto-generated ephemeral Actions token — which
+          # 404s on GET /pulls/{n}, so every AGit PR was misclassified as
+          # "not an AGit fleet PR" and never armed (root-caused on
+          # ratelab-sites; this repo's arm path had never fired).
+          # AUTOMERGE_TOKEN is a stored repo secret holding a real API token.
+          TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
           API: ${{ github.server_url }}/api/v1
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
