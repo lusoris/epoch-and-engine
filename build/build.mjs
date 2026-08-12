@@ -7,6 +7,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync, cpSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadPosts } from './lib/posts.mjs';
+import { ping } from './lib/indexnow.mjs';
 import { renderFeed, renderIndex, renderPost, renderSitemap } from './lib/render.mjs';
 
 const OUT = 'out';
@@ -33,7 +34,7 @@ function relatedTo(post, posts) {
     .map((entry) => entry.other);
 }
 
-function main() {
+async function main() {
   const site = JSON.parse(readFileSync('site.config.json', 'utf8'));
   const posts = loadPosts().sort((a, b) => {
     if (a.data.date !== b.data.date) return a.data.date < b.data.date ? 1 : -1;
@@ -64,6 +65,12 @@ function main() {
   }
 
   console.log(`build: wrote ${posts.length} post(s) to ${OUT}/`);
+
+  try {
+    await ping(site.baseUrl, posts);
+  } catch (err) {
+    console.error(`indexnow: non-fatal error — ${err.message}`);
+  }
 }
 
-main();
+await main();
