@@ -1,0 +1,24 @@
+{
+  "name": "epoch-and-engine/bedrock-tooling",
+  "description": "WordPress Bedrock dependency manifest for blog.ancilla.lol deployment.",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "roots/bedrock": "^1.0",
+    "roots/wordpress": "^6.4",
+    "roots/wp-config": "^0.6",
+    "wpackagist-plugin/theme-my-login": "*",
+    "wpackagist-plugin/redirection": "*"
+  },
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://wpackagist.org"
+    }
+  ],
+  "config": {
+    "vendor-dir": "web/app/vendor"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

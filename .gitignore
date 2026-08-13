@@ -1,4 +1,1 @@
-node_modules/
-out/
-.DS_Store
-*.log
+## Ignore generated lockfile — must be recreated by `composer install` in CI.
