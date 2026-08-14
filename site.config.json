@@ -4,5 +4,11 @@
   "description": "Long-form histories of the ideas and machines that changed the world — sourced, dated, and checked.",
   "baseUrl": "https://blog.ancilla.lol",
   "language": "en",
-  "postsPerPage": 20
+  "postsPerPage": 20,
+  "google": {
+    "analyticsId": "",
+    "adsensePublisherId": "",
+    "searchConsoleVerificationTag": "",
+    "adManagerPropertyId": ""
+  }
 }

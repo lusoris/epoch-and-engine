@@ -67,6 +67,9 @@ function layout(site, { title, description, canonical, body, image, bodyClass = 
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:url" content="${escapeHtml(canonical)}">
 ${image ? `<meta property="og:image" content="${escapeHtml(site.baseUrl + image)}">\n<meta name="twitter:card" content="summary_large_image">` : ''}
+${site.google?.searchConsoleVerificationTag ? `<meta name="google-site-verification" content="${escapeHtml(site.google.searchConsoleVerificationTag)}">\n` : ''}
+${site.google?.analyticsId ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${escapeHtml(site.google.analyticsId)}"></script>\n<script>\nwindow.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${escapeHtml(site.google.analyticsId)}');\n</script>\n` : ''}
+${site.google?.adsensePublisherId ? `<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${escapeHtml(site.google.adsensePublisherId)}" crossorigin="anonymous"></script>\n` : ''}
 </head>
 <body class="${bodyClass}">
 <a class="skip" href="#main">Skip to content</a>
