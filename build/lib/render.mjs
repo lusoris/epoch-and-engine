@@ -245,8 +245,13 @@ ${items}
 }
 
 export function renderSitemap(site, posts) {
-  const urls = [`${site.baseUrl}/`, ...posts.map((post) => `${site.baseUrl}/posts/${post.slug}/`)];
-  const entries = urls.map((url) => `  <url><loc>${escapeHtml(url)}</loc></url>`).join('\n');
+  const entries = [
+    `  <url><loc>${escapeHtml(site.baseUrl + '/')}</loc><lastmod>${escapeHtml(posts[0].data.date)}</lastmod></url>`,
+    ...posts.map(
+      (post) =>
+        `  <url><loc>${escapeHtml(site.baseUrl + '/posts/' + post.slug + '/')}</loc><lastmod>${escapeHtml(post.data.date)}</lastmod></url>`,
+    ),
+  ].join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${entries}
